@@ -1,0 +1,65 @@
+name: "Build the openstack rag-content container image"
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  IMAGE_NAME: hello-world
+  BUILDAH_RUNTIME: docker
+
+jobs:
+  build-rag-content:
+    runs-on: ubuntu-22.04
+
+    strategy:
+      matrix:
+        architecture: [cpu]
+
+    steps:
+      - name: Free Disk Space (Ubuntu)
+        uses: jlumbroso/free-disk-space@main
+        with:
+          # this might remove tools that are actually needed,
+          # if set to "true" but frees about 6 GB
+          tool-cache: false
+
+      # Checkout push-to-registry action github repository
+      - name: Checkout Push to Registry action
+        uses: actions/checkout@v4
+
+      # TODO(lpiwowar): Try this instead -> - uses: gacts/install-podman@v1
+      - name: Install podman (required for buildah to be present)
+        run: |
+          sudo apt update
+          sudo apt install podman -y
+
+      # TODO (lpiwowar):
+      # - name: Log in to Quay.io
+      #   uses: redhat-actions/podman-login@v1
+      #   with:
+      #     username: ${{ env.REGISTRY_USER }}
+      #     password: ${{ env.REGISTRY_PASSWORD }}
+      #     registry: ${{ env.IMAGE_REGISTRY }}
+
+      - name: Authenticate against registry.access.redhat.io
+        run: |
+          echo "${{ secrets.REDHAT_REGISTRY_PASSWORD }}" | podman login --username ${{ secrets.REDHAT_REGISTRY_LOGIN }} --password-stdin registry.access.redhat.com
+
+      - name: Tortuga
+        run: |
+          podman build -t rag-content-openstack:latest -f ./Containerfile --build-arg FLAVOR=cpu --build-arg NUM_WORKERS=10 .
+
+      # Build image using Buildah action
+      # - name: Build Image
+      #   id: build_image
+      #   uses: redhat-actions/buildah-build@v2
+      #   with:
+      #     image: ${{ env.IMAGE_NAME }}
+      #     tags: latest-${{ matrix.architecture }} ${{ github.sha }}-${{ matrix.architecture }}
+      #     oci: true
+      #     build-args: FLAVOR=${{ matrix.architecture }}
+      #     context: .
+      #     containerfiles: |
+      #       ./Containerfile
