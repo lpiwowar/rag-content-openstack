@@ -51,7 +51,8 @@ jobs:
           password: ${{ secrets.REDHAT_REGISTRY_PASSWORD }}
           registry: registry.redhat.io
 
-      - name: Build only partiall rag-content when running in check pipeline
+
+      - name: Build only partial rag-content when running in check pipeline
         if: github.event_name != 'schedule'
         run: |
           echo EXTRA_BUILD_ARGS=OS_PROJECTS="swift" >> $GITHUB_ENV
@@ -74,8 +75,16 @@ jobs:
           containerfiles: |
             ./Containerfile
 
+      - name: Log in to quay.io
+        if: github.event_name == 'schedule'
+        uses: redhat-actions/podman-login@v1
+        with:
+          username: ${{ secrets.QUAY_IO_LOGIN }}
+          password: ${{ secrets.QUAY_IO_PASSWORD }}
+          registry: quay.io
+
       - name: Push the rag-content to quay.io
-        # if: github.event_name == 'schedule'
+        if: github.event_name == 'schedule' || github.event_name == "workflow_dispatch"
         uses: redhat-actions/push-to-registry@v2
         id: push
         with:
@@ -86,15 +95,15 @@ jobs:
           password: ${{ secrets.QUAY_IO_PASSWORD }}
 
       - name: Get sha256 digest
-        # if: github.event_name == 'schedule'
+        if: github.event_name == 'schedule' || github.event_name == "workflow_dispatch"
         run: |
-          DIGEST=$(podman inspect --format='{{.Digest}}' quay.io/openstack-lightspeed/${{ steps.build_image.outputs.image }}:${{ github.sha }})
+          DIGEST=$(podman inspect --format='{{.Digest}}' rag-content-openstack:${{ github.sha }})
           echo "IMAGE_DIGEST=$DIGEST" >> $GITHUB_ENV
 
       - name: Sign image with a key
-        # if: github.event_name == 'schedule'
+        if: github.event_name == 'schedule' || github.event_name == "workflow_dispatch"
         run: |
-          cosign sign --yes --key env://COSIGN_PRIVATE_KEY quay.io/openstack-lightspeed/${{ steps.build_image.outputs.image }}:${{ env.IMAGE_DIGEST }}
+          cosign sign --yes --key env://COSIGN_PRIVATE_KEY ${{ env.IMAGE_NAME }}@${{ env.IMAGE_DIGEST }}
         env:
           COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
-
+          IMAGE_NAME: quay.io/openstack-lightspeed/${{ github.event.repository.name }}
