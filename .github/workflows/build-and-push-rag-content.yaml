@@ -25,12 +25,6 @@ jobs:
   build-and-push-rag-content:
     runs-on: ubuntu-latest
     steps:
-      - name: Free disk space (Ubuntu)
-        uses: jlumbroso/free-disk-space@v1.3.1
-        with:
-          # This might remove tools that are actually needed,
-          # if set to "true" but frees about 6 GB.
-          tool-cache: true
 
       - name: Checkout to the repository
         uses: actions/checkout@v4
