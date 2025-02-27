@@ -74,7 +74,7 @@ jobs:
             ./Containerfile
 
       - name: Log in to quay.io
-        if: github.event_name == 'schedule' || github.event_name == 'push'
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
         uses: redhat-actions/podman-login@v1
         with:
           username: ${{ secrets.QUAY_IO_LOGIN }}
@@ -82,7 +82,7 @@ jobs:
           registry: quay.io
 
       - name: Push the image to quay.io
-        if: github.event_name == 'schedule' || github.event_name == 'push'
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
         uses: redhat-actions/push-to-registry@v2
         id: push
         with:
@@ -93,13 +93,13 @@ jobs:
           password: ${{ secrets.QUAY_IO_PASSWORD }}
 
       - name: Get sha256 digest
-        if: github.event_name == 'schedule' || github.event_name == 'push'
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
         run: |
           DIGEST=$(skopeo inspect docker://${{ env.IMAGE_NAME }}:${{ github.sha }} | jq -r '.Digest')
           echo "IMAGE_DIGEST=$DIGEST" >> $GITHUB_ENV
 
       - name: Sign image
-        if: github.event_name == 'schedule' || github.event_name == 'push'
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
         run: |
           cosign sign --yes --key env://COSIGN_PRIVATE_KEY ${{ env.IMAGE_NAME }}@${{ env.IMAGE_DIGEST }}
         env:
