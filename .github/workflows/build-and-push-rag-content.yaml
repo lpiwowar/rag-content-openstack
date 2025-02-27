@@ -45,11 +45,6 @@ jobs:
           password: ${{ secrets.REDHAT_REGISTRY_PASSWORD }}
           registry: registry.redhat.io
 
-      - name: Build only partial rag-content when running in the check pipeline
-        if: github.event_name != 'schedule' || github.event_name != 'push'
-        run: |
-          echo OS_PROJECTS="nova" >> $GITHUB_ENV
-
       - name: Build image
         id: build_image
         uses: redhat-actions/buildah-build@v2
