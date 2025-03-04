@@ -39,6 +39,7 @@ jobs:
         uses: sigstore/cosign-installer@v3.8.1
 
       - name: Log in to registry.redhat.io
+        if: github.event_name == 'schedule' || github.event_name == 'push'
         uses: redhat-actions/podman-login@v1
         with:
           username: ${{ secrets.REDHAT_REGISTRY_LOGIN }}
