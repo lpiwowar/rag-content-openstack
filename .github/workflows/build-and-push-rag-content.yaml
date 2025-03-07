@@ -38,11 +38,6 @@ jobs:
       - name: Install cosign
         uses: sigstore/cosign-installer@v3.8.1
 
-      - name: Build only partial rag-content when running in the check pipeline
-        if: github.event_name == 'pull_request'
-        run: |
-          echo OS_PROJECTS="nova" >> $GITHUB_ENV
-
       - name: Build image
         id: build_image
         uses: redhat-actions/buildah-build@v2
@@ -62,7 +57,6 @@ jobs:
             ./Containerfile
 
       - name: Log in to quay.io
-        if: github.event_name == 'schedule' || github.event_name == 'push'
         uses: redhat-actions/podman-login@v1
         with:
           username: ${{ secrets.QUAY_IO_LOGIN }}
@@ -70,7 +64,6 @@ jobs:
           registry: quay.io
 
       - name: Push the image to quay.io
-        if: github.event_name == 'schedule' || github.event_name == 'push'
         uses: redhat-actions/push-to-registry@v2
         id: push
         with:
@@ -81,13 +74,11 @@ jobs:
           password: ${{ secrets.QUAY_IO_PASSWORD }}
 
       - name: Get sha256 digest
-        if: github.event_name == 'schedule' || github.event_name == 'push'
         run: |
           DIGEST=$(skopeo inspect docker://${{ env.IMAGE_NAME }}:${{ github.sha }} | jq -r '.Digest')
           echo "IMAGE_DIGEST=$DIGEST" >> $GITHUB_ENV
 
       - name: Sign image
-        if: github.event_name == 'schedule' || github.event_name == 'push'
         run: |
           cosign sign --yes --key env://COSIGN_PRIVATE_KEY ${{ env.IMAGE_NAME }}@${{ env.IMAGE_DIGEST }}
         env:
