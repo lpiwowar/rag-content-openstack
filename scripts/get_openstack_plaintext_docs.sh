@@ -87,7 +87,6 @@ deps =
 commands =
   sphinx-build --keep-going -j auto -b text doc/source doc/build/text
 "
-
     echo "Generating the plain-text documentation for OpenStack $project"
     # Clone the project's repository, if not present
     if [ ! -d "$project" ]; then
