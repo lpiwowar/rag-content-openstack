@@ -43,6 +43,9 @@ CURR_DIR=$(pwd)
 NUM_WORKERS=${NUM_WORKERS:-$(nproc)}
 
 # Files containing logs from subprocesses
+NUM_WORKERS=${NUM_WORKERS:-$(nproc)}
+
+# Log failes containing log from subprocesses
 declare -a LOG_FILES
 
 # Show content of log files stored in LOG_FILES.
