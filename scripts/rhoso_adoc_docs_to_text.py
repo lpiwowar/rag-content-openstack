@@ -19,11 +19,33 @@ import argparse
 from pathlib import Path
 import logging
 from lightspeed_rag_content.asciidoc import AsciidoctorConverter
+from packaging.version import Version
 from typing import Generator, Tuple
 import xml.etree.ElementTree as ET
 
 LOG = logging.getLogger()
 logging.basicConfig(level=logging.INFO)
+
+DEFAULT_EXCLUDE_TITLES = [
+    "hardening_red_hat_openstack_services_on_openshift",  # Replaced by ./configuring_security_services and ./performing_security_operations
+    "integrating_openstack_identity_with_external_user_management_services",  # Replaced by configuring_security_services and performing_security_operations
+    "firewall_rules_for_red_hat_openstack_platform",  # Not applicable to 18+
+    "managing_overcloud_observability",  # Replaced by ./customizing_the_red_hat_openstack_services_on_openshift_deployment/master.txt
+    "network_planning_(sandbox)",  # Content (other than MTU details) included in ./planning_your_deployment/master.txt
+    "managing_secrets_with_the_key_manager_service",  # Replaced by ./performing_security_operations/master.txt
+    "migrating_to_the_ovn_mechanism_driver",  # Not applicable to 18+
+    "deploying_red_hat_openstack_platform_at_scale",  # Content is just a stub (WIP)
+    "deploying_distributed_compute_nodes_with_separate_heat_stacks",  # Not applicable to 18+
+    "installing_ember-csi_on_openshift_container_platform",  # Not applicable to 18+
+    "introduction_to_red_hat_openstack_platform",  # Not applicable to 18+
+    "red_hat_openstack_platform_benchmarking_service",  # Not applicable to 18+
+    "backing_up_and_restoring_the_undercloud_and_control_plane_nodes",  # No content in this doc
+    "configuring_dns_as_a_service",  # WIP, expected for RHOSO 18 FR3
+]
+
+DEFAULT_REMAP_TITLES = {
+    "command_line_interface_(cli)_reference": "command_line_interface_reference"
+}
 
 
 def get_argument_parser() -> argparse.ArgumentParser:
@@ -56,6 +78,23 @@ def get_argument_parser() -> argparse.ArgumentParser:
         required=False,
         type=Path,
     )
+    parser.add_argument(
+        "-e",
+        "--exclude-titles",
+        required=False,
+        type=str,
+        nargs="+",
+        default=DEFAULT_EXCLUDE_TITLES,
+    )
+
+    parser.add_argument(
+        "-r",
+        "--remap-titles",
+        required=False,
+        type=str,
+        nargs="+",
+        default=DEFAULT_REMAP_TITLES,
+    )
 
     return parser
 
@@ -76,7 +115,11 @@ def get_xml_element_text(root_element: ET.Element, element_name) -> str | None:
 
 
 def red_hat_docs_path(
-    input_dir: Path, output_dir: Path, docs_version: str
+    input_dir: Path,
+    output_dir: Path,
+    docs_version: str,
+    exclude_list: list,
+    remap_titles: list,
 ) -> Generator[Tuple[Path, Path], None, None]:
     """Generate input and output path for asciidoctor based converter
 
@@ -107,13 +150,27 @@ def red_hat_docs_path(
             docinfo_content = f.read()
             tree = ET.fromstring(f"<root>{docinfo_content}</root>")
 
-            if get_xml_element_text(tree, "productnumber") != docs_version:
+            productnumber = get_xml_element_text(tree, "productnumber")
+            if Version(productnumber) != Version(docs_version):
+                LOG.warning(
+                    f"{docinfo} productnumber {productnumber} != {docs_version}. Skipping ..."
+                )
                 continue
 
             if (path_title := get_xml_element_text(tree, "title")) is None:
+                LOG.warning(f"{docinfo} title is blank. Skipping ...")
                 continue
 
             path_title = path_title.lower().replace(" ", "_")
+
+        if path_title in exclude_list:
+            LOG.info(f"{path_title} is in exclude list. Skipping ...")
+            continue
+
+        if path_title in remap_titles:
+            new_path_title = remap_titles[path_title]
+            LOG.info(f"Remapping {path_title} to {new_path_title}.")
+            path_title = new_path_title
 
         yield Path(file), output_dir / path_title / "master.txt"
 
@@ -124,6 +181,10 @@ if __name__ == "__main__":
 
     adoc_text_converter = AsciidoctorConverter(attributes_file=args.attributes_file)
     for input_path, output_path in red_hat_docs_path(
-        args.input_dir, args.output_dir, args.docs_version
+        args.input_dir,
+        args.output_dir,
+        args.docs_version,
+        args.exclude_titles,
+        args.remap_titles,
     ):
         adoc_text_converter.convert(input_path, output_path)

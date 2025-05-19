@@ -24,6 +24,9 @@ RHOSO_DOCS_GIT_URL=${RHOSO_DOCS_GIT_URL:-}
 RHOSO_DOCS_ATTRIBUTES_FILE_URL=${RHOSO_DOCS_ATTRIBUTES_FILE_URL:-}
 [ -z "${RHOSO_DOCS_ATTRIBUTES_FILE_URL}" ] && echo "Err: Mising RHOSO_DOCS_ATTRIBUTES_FILE_URL!" && exit 1
 
+# The name of the output directory
+OUTPUT_DIR_NAME=${OUTPUT_DIR_NAME:-rhoso-docs-plaintext}
+
 # Clone RHOSO documentation and generate vector database for it
 generate_text_docs_rhoso() {
     local rhoso_docs_folder="./rhoso_docs"
@@ -37,11 +40,12 @@ generate_text_docs_rhoso() {
     # TODO(lpiwowar): Remove -k (skips validation of the certificate)
     curl -L -k -o "${attributes_file}" "${RHOSO_DOCS_ATTRIBUTES_FILE_URL}"
 
-    # TODO(lpiwowar): Process other folders than "titles"
-    python ./scripts/rhoso_adoc_docs_to_text.py \
-        --input-dir ${rhoso_docs_folder}/titles \
-        --attributes-file ${attributes_file} \
-        --output-dir openstack-docs-plaintext/
+    for subdir in "${rhoso_docs_folder}/titles" "${rhoso_docs_folder}"/doc-*; do
+        python ./scripts/rhoso_adoc_docs_to_text.py \
+            --input-dir "${subdir}" \
+            --attributes-file "${attributes_file}" \
+            --output-dir "$OUTPUT_DIR_NAME/"
+    done
 }
 
 generate_text_docs_rhoso

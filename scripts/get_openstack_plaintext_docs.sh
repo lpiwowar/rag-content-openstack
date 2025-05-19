@@ -22,6 +22,9 @@ if ! command -v tox &> /dev/null; then
   exit 1
 fi
 
+# The name of the output directory
+OUTPUT_DIR_NAME=${OUTPUT_DIR_NAME:-openstack-docs-plaintext}
+
 # OpenStack Version
 OS_VERSION=${OS_VERSION:-2024.2}
 
@@ -33,6 +36,20 @@ octavia designate heat placement ironic barbican aodh watcher adjutant blazar \
 cyborg magnum mistral skyline-apiserver skyline-console storlets \
 venus vitrage zun python-openstackclient tempest trove zaqar masakari"
 OS_PROJECTS=${OS_PROJECTS:-$_OS_PROJECTS}
+
+# List of paths to prune from final docs set. The default set are pages that
+# are no longer published but are still generated from the git source
+if [ "${PRUNE_PATHS:-}" == "" ]; then
+    PRUNE_PATHS=(
+        glance/2024.2/contributor/api/glance.common.format_inspector.txt
+        neutron/2024.2/contributor/internals/linuxbridge_agent.txt
+        neutron/2024.2/contributor/testing/ci_scenario_jobs.txt
+        python-openstackclient/2024.2/contributor/api/openstackclient.volume.v1.txt
+        python-openstackclient/2024.2/contributor/specs/command-objects/example.txt
+        python-openstackclient/2024.2/contributor/specs/commands.txt
+        python-openstackclient/2024.2/contributor/specs/network-topology.txt
+    )
+fi
 
 # Read the environment variable into an array
 IFS=' ' read -r -a os_projects <<< "$OS_PROJECTS"
@@ -138,14 +155,21 @@ deps =
     # Generate the docs in plain-text
     tox -etext-docs
 
+    # These projects have all their docs under "latest" instead of "2024.2"
+    if  [ "${project}" == "adjutant" ] || [ "${project}" == "cyborg" ] || [ "${project}" == "tempest" ] || [ "${project}" == "venus" ]; then
+        _output_version="latest"
+    else
+        _output_version="${OS_VERSION}"
+    fi
+
     # Copy documentation to project's output directory
     local project_output_dir=$WORKING_DIR/openstack-docs-plaintext/$project
     rm -rf "$project_output_dir"
     mkdir -p "$project_output_dir"
-    cp -r doc/build/text "$project_output_dir"/"$OS_VERSION"
+    cp -r doc/build/text "$project_output_dir"/"$_output_version"
 
     # Remove artifacts
-    rm -rf "$project_output_dir"/"$OS_VERSION"/{_static/,.doctrees/}
+    rm -rf "$project_output_dir"/"$_output_version"/{_static/,.doctrees/}
 
     # Exit project's directory
     cd -
@@ -168,7 +192,7 @@ for os_project in "${os_projects[@]}"; do
     generate_text_doc "$os_project" "$_os_version" > "${os_project_log_file}" 2>&1 &
 
     num_running_subproc=$(jobs -r | wc -l)
-    if [ "${num_running_subproc}" -gt "${NUM_WORKERS}" ]; then
+    if [ "${num_running_subproc}" -ge "${NUM_WORKERS}" ]; then
         echo "Using ${num_running_subproc}/${NUM_WORKERS} workers. Waiting ..."
         wait -n || log_and_die "Subprocess generating text documentation failed!"
 	echo "Using $(( --num_running_subproc ))/${NUM_WORKERS} workers."
@@ -182,8 +206,14 @@ for subproc_pid in $(jobs -p); do
 done
 cat_log_files
 
+pushd "${WORKING_DIR}/openstack-docs-plaintext"
+for path in "${PRUNE_PATHS[@]}"; do
+    rm -f -- "$path"
+done
+popd
+
 rm -rf "$CURR_DIR"/openstack-docs-plaintext/*/"${OS_VERSION}"
-cp -r "$WORKING_DIR"/openstack-docs-plaintext "$CURR_DIR"
+cp -r "$WORKING_DIR"/openstack-docs-plaintext "$CURR_DIR/$OUTPUT_DIR_NAME"
 
 # TODO(lucasagomes): Should we delete the working directory ?!
-echo "Done. Documents can be found at $CURR_DIR/openstack-docs-plaintext"
+echo "Done. Documents can be found at $CURR_DIR/$OUTPUT_DIR_NAME"
