@@ -69,27 +69,27 @@ jobs:
           password: ${{ secrets.QUAY_IO_PASSWORD }}
           registry: quay.io
 
-      - name: Push the image to quay.io
-        if: github.event_name == 'schedule' || github.event_name == 'push'
-        uses: redhat-actions/push-to-registry@v2
-        id: push
-        with:
-          registry: quay.io/openstack-lightspeed
-          image: ${{ steps.build_image.outputs.image }}
-          tags: ${{ steps.build_image.outputs.tags }}
-          username: ${{ secrets.QUAY_IO_LOGIN }}
-          password: ${{ secrets.QUAY_IO_PASSWORD }}
+      # - name: Push the image to quay.io
+      #   if: github.event_name == 'schedule' || github.event_name == 'push'
+      #   uses: redhat-actions/push-to-registry@v2
+      #   id: push
+      #   with:
+      #     registry: quay.io/openstack-lightspeed
+      #     image: ${{ steps.build_image.outputs.image }}
+      #     tags: ${{ steps.build_image.outputs.tags }}
+      #     username: ${{ secrets.QUAY_IO_LOGIN }}
+      #     password: ${{ secrets.QUAY_IO_PASSWORD }}
 
-      - name: Get sha256 digest
-        if: github.event_name == 'schedule' || github.event_name == 'push'
-        run: |
-          DIGEST=$(skopeo inspect docker://${{ env.IMAGE_NAME }}:${{ github.sha }} | jq -r '.Digest')
-          echo "IMAGE_DIGEST=$DIGEST" >> $GITHUB_ENV
+      # - name: Get sha256 digest
+      #   if: github.event_name == 'schedule' || github.event_name == 'push'
+      #   run: |
+      #     DIGEST=$(skopeo inspect docker://${{ env.IMAGE_NAME }}:${{ github.sha }} | jq -r '.Digest')
+      #     echo "IMAGE_DIGEST=$DIGEST" >> $GITHUB_ENV
 
-      - name: Sign image
-        if: github.event_name == 'schedule' || github.event_name == 'push'
-        run: |
-          cosign sign --yes --key env://COSIGN_PRIVATE_KEY ${{ env.IMAGE_NAME }}@${{ env.IMAGE_DIGEST }}
-        env:
-          COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
-          COSIGN_PASSWORD: ${{ secrets.COSIGN_KEY_PASSWORD }}
+      # - name: Sign image
+      #   if: github.event_name == 'schedule' || github.event_name == 'push'
+      #   run: |
+      #     cosign sign --yes --key env://COSIGN_PRIVATE_KEY ${{ env.IMAGE_NAME }}@${{ env.IMAGE_DIGEST }}
+      #   env:
+      #     COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
+      #     COSIGN_PASSWORD: ${{ secrets.COSIGN_KEY_PASSWORD }}
