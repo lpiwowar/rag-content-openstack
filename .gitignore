@@ -1,3 +1,8 @@
+# OpenStack rag-content data
+openstack-docs-plaintext/
+vector_db/
+embeddings_model/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -169,3 +174,7 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+# OKP guardrails
+okp-content/*
+mimir-*

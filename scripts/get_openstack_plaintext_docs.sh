@@ -15,10 +15,19 @@
 # under the License.
 
 set -eou pipefail
+set -x
+
+PYTHON_VERSION=${PYTHON_VERSION:-3.12}
+PYTHON="python${PYTHON_VERSION}"
 
 # Check if 'tox' is available
 if ! command -v tox &> /dev/null; then
   echo "Error: 'tox' is not installed, please install it before continuing." >&2
+  exit 1
+fi
+
+if ! command -v "$PYTHON"  &> /dev/null; then
+  echo "Error: '$PYTHON' is not installed, please install it before continuing." >&2
   exit 1
 fi
 
@@ -55,7 +64,11 @@ fi
 IFS=' ' read -r -a os_projects <<< "$OS_PROJECTS"
 
 # Working directory
-WORKING_DIR="/tmp/os_docs_temp"
+WORKING_DIR="${WORKING_DIR:-/tmp/os_docs_temp}"
+
+# Whether to delete files on success or not.
+# Acceptable values are "all", "venv", in other cases they are not deleted
+CLEAN_FILES="${CLEAN_FILES:-}"
 
 # The current directory where the script was invoked
 CURR_DIR=$(pwd)
@@ -90,8 +103,9 @@ log_and_die() {
 # Clone repository from OpenDev and generate documentation in text format.
 # Arguments:
 #   $1 - Name of the OpenDev repository
+#   $2 - Project version
 # Usage:
-#   generate_text_doc "nova"
+#   generate_text_doc "nova" "2024.2"
 generate_text_doc() {
     local project=$1
     local _os_version=$2
@@ -100,6 +114,7 @@ generate_text_doc() {
 [testenv:text-docs]
 description =
     Build documentation in text format.
+basepython = $PYTHON
 commands =
   sphinx-build --keep-going -j auto -b text doc/source doc/build/text
 deps =
@@ -108,16 +123,18 @@ deps =
 "
 
     echo "Generating the plain-text documentation for OpenStack $project"
+
     # Clone the project's repository, if not present
+    local branch_prefix=""
+    if [ "$_os_version" != "master" ]; then
+        branch_prefix="stable/"
+    fi
+
     if [ ! -d "$project" ]; then
-        git clone https://opendev.org/openstack/"$project".git
+        git clone -v --depth=1 --single-branch -b "${branch_prefix}${_os_version}" https://opendev.org/openstack/"$project".git
     fi
 
     cd "$project"
-    if [ "$_os_version" != "master" ]; then
-        git switch stable/"$_os_version"
-        git pull origin stable/"$_os_version"
-    fi
 
     # TODO(lpiwowar): Remove workarounds. Some of the documentations do not work with
     # the feature of sphinx-build that allows generation of the docs in text format.
@@ -154,12 +171,13 @@ deps =
 
     # Generate the docs in plain-text
     tox -etext-docs
+    [ "${CLEAN_FILES}" == "venv" ] && rm -rf .tox/text-docs
 
     # These projects have all their docs under "latest" instead of "2024.2"
     if  [ "${project}" == "adjutant" ] || [ "${project}" == "cyborg" ] || [ "${project}" == "tempest" ] || [ "${project}" == "venus" ]; then
         _output_version="latest"
     else
-        _output_version="${OS_VERSION}"
+        _output_version="${_os_version}"
     fi
 
     # Copy documentation to project's output directory
@@ -168,15 +186,16 @@ deps =
     mkdir -p "$project_output_dir"
     cp -r doc/build/text "$project_output_dir"/"$_output_version"
 
-    # Remove artifacts
-    rm -rf "$project_output_dir"/"$_output_version"/{_static/,.doctrees/}
-
     # Exit project's directory
     cd -
+
+    # Remove artifacts
+    [ "${CLEAN_FILES}" == "all" ] && rm -rf "$project"
+    rm -rf "$project_output_dir"/"$_output_version"/{_static/,.doctrees/}
 }
 
-mkdir -p $WORKING_DIR
-cd $WORKING_DIR
+mkdir -p "$WORKING_DIR"
+cd "$WORKING_DIR"
 echo "Working directory: $WORKING_DIR"
 
 for os_project in "${os_projects[@]}"; do

@@ -14,12 +14,12 @@ There are several ways how to access the OpenStack vector database:
 
 ## Generate OpenStack Vector Database
 
-1. Install requirements: `python3.11.*`.
+1. Install requirements: `python3.12.*`.
 
 2. Create virtualenv.
 
 ```
-python3.11 -m venv .venv && . .venv/bin/activate
+python3.12 -m venv .venv && . .venv/bin/activate
 ```
 
 3. Install dependencies.
@@ -34,26 +34,32 @@ pip install -r requirements.txt
 ./scripts/get_openstack_plaintext_docs.sh
 ```
 
+   Useful env vars for this script:
+   - `CLEAN_FILES` what to clean on success: `venv`, `all` (whole project), or nothing (default).
+   - `NUM_WORKERS` if the default number (`nproc`) is too high
+   - `WORKING_DIR` if you don't want to use the default `/tmp/os_docs_temp`.
+
 5. Download the embedding model.
 
 ```
 make get-embeddings-model
 ```
 
-> **Note:**
-> The get-embeddings-model target pulls in the embedding
-> model from the most recent build. To download it from
-> source, use the `download_embeddings_model.py` script from
-> [road-core/rag-content](https://github.com/road-core/rag-content):
+> [!NOTE]
+> The get-embeddings-model target pulls in the embedding model from the most
+> recent build. To download it from source, use the `download_embeddings_model.py`
+> script from [lightspeed-core/rag-content](https://github.com/lightspeed-core/rag-content):
 >
 > ```bash
-> curl -O https://raw.githubusercontent.com/road-core/rag-content/refs/heads/main/scripts/download_embeddings_model.py
+> curl -O https://raw.githubusercontent.com/lightspeed-core/rag-content/refs/heads/main/scripts/download_embeddings_model.py
 > python ./download_embeddings_model.py \
 >     -l ./embeddings_model/ \
 >     -r sentence-transformers/all-mpnet-base-v2
 > ```
 
 6. Generate the vector database.
+
+- For llama-index
 
 ```
 python ./scripts/generate_embeddings_openstack.py \
@@ -65,7 +71,27 @@ python ./scripts/generate_embeddings_openstack.py \
         -w $(( $(nproc --all) / 2 ))
 ```
 
-7. Use the vector database stored in `./vector_db`.
+- For llama-stack
+
+```
+python ./scripts/generate_embeddings_openstack.py \
+        -o ./vector_db/ \
+        -f openstack-docs-plaintext/ \
+        -md embeddings_model \
+        -mn sentence-transformers/all-mpnet-base-v2 \
+        -i os-docs \
+        --vector-store-type=llamastack-faiss \
+        -w $(( $(nproc --all) / 2 ))
+```
+
+7. Test the database stored in `./vector_db`
+
+```bash
+curl -o /tmp/query_rag.py https://raw.githubusercontent.com/lightspeed-core/rag-content/refs/heads/main/scripts/query_rag.py
+python /tmp/query_rag.py -p vector_db -x os-docs -m embeddings_model -k 5 -q "how can I configure a cinder backend"
+```
+
+8. Use the vector database stored in `./vector_db`.
 
 
 ## Build Container Image Containing OpenStack Vector Database
@@ -78,6 +104,24 @@ python ./scripts/generate_embeddings_openstack.py \
 make build-image-os FLAVOR=cpu
 ```
 
+If we have an Nvidia GPU card properly configured in podman we can run:
+
+```bash
+make build-image-os FLAVOR=gpu
+```
+
+If our GPU is not an Nvidia card and is supported by podman and torch, then we
+can override the default value in `BUILD_GPU_ARGS` (here we show de default
+value):
+
+```bash
+make build-image-os FLAVOR=gpu BUILD_GPU_ARGS="--device nvidia.com/gpu=all"
+```
+
+> [!NOTE]
+> Using GPU capabilities within a Podman container requires setting up your OS
+> to utilize the GPU. [Follow official instructions to create the CDI](https://podman-desktop.io/docs/podman/gpu).
+
 3. The generated vector database can be found under `/rag/vector_db/os_product_docs`
 inside of the image.
 
@@ -85,6 +129,29 @@ inside of the image.
 podman run localhost/rag-content-openstack:latest ls /rag/vector_db/os_product_docs
 ```
 
+## Build with OKP content
+
+To include OKP content in the RAG, copy the non-paywalled OKP content into
+the `okp-content` directory of this project, for example:
+
+```bash
+cp -r red_hat_content/{documentation,errata,pages} okp-content/
+```
+
+Next, set `BUILD_OKP_CONTENT` to true when building the container image,
+for example:
+
+```bash
+make build-image-os BUILD_OKP_CONTENT="true"
+```
+
+By default, all content in the folder will be ingested. To choose specific
+items to include in the RAG, use the `OKP_CONTENT` parameter with a
+space-separated list of content, for example:
+
+```bash
+make build-image-os BUILD_OKP_CONTENT="true" OKP_CONTENT="pages documentation"
+```
 
 ## Download the Pre-built Container Image Containing OpenStack Vector Database
 
